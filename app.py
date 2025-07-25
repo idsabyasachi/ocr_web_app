@@ -7,15 +7,19 @@ from docx import Document
 from fpdf import FPDF
 import uuid
 import shutil
+import unicodedata  
 
-# Path to Tesseract executable
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+#  tesseract.exe location
+pytesseract.pytesseract.tesseract_cmd = r"D:\Tesseract\tesseract.exe"
 
-UPLOAD_FOLDER = 'uploads'
+#  Upload folder
+UPLOAD_FOLDER = r"D:\ocr_web_app\uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# Supported OCR languages
+# Language support
 LANGUAGES = {'English': 'eng', 'Hindi': 'hin', 'Bengali': 'ben'}
 
 @app.route('/', methods=['GET', 'POST'])
@@ -39,19 +43,22 @@ def index():
             text = pytesseract.image_to_string(image, lang=lang_code)
             all_text += text + "\n"
 
-        # Save as Word
+        #  Word
         word_path = os.path.join(session_folder, 'output.docx')
         doc = Document()
         doc.add_paragraph(all_text)
         doc.save(word_path)
 
-        # Save as PDF
+        #  PDF 
         pdf_path = os.path.join(session_folder, 'output.pdf')
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", size=12)
+
         for line in all_text.split('\n'):
-            pdf.multi_cell(0, 10, line)
+            clean_line = unicodedata.normalize('NFKD', line).encode('ascii', 'ignore').decode('ascii')
+            pdf.multi_cell(0, 10, clean_line)
+
         pdf.output(pdf_path)
 
         return render_template('index.html', text=all_text, session_id=session_id)
@@ -62,9 +69,9 @@ def index():
 def download(session_id, filename):
     path = os.path.join(app.config['UPLOAD_FOLDER'], session_id, filename)
     response = send_file(path, as_attachment=True)
-    
-    # Auto-delete after download
-    shutil.rmtree(os.path.join(app.config['UPLOAD_FOLDER'], session_id))
+
+    # Auto-del session folder
+    shutil.rmtree(os.path.join(app.config['UPLOAD_FOLDER'], session_id), ignore_errors=True)
     return response
 
 @app.route('/clear', methods=['POST'])
